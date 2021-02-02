@@ -6,15 +6,15 @@ import (
 	"image/color"
 	"io/ioutil"
 	"log"
-	"time"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/canvas"
-	"fyne.io/fyne/container"
-	"fyne.io/fyne/dialog"
-	"fyne.io/fyne/storage"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/validation"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 func confirmCallback(response bool) {
@@ -45,34 +45,7 @@ func dialogScreen(win fyne.Window) fyne.CanvasObject {
 			cnf.SetConfirmText("Oh Yes!")
 			cnf.Show()
 		}),
-		widget.NewButton("Progress", func() {
-			prog := dialog.NewProgress("MyProgress", "Nearly there...", win)
-
-			go func() {
-				num := 0.0
-				for num < 1.0 {
-					time.Sleep(50 * time.Millisecond)
-					prog.SetValue(num)
-					num += 0.01
-				}
-
-				prog.SetValue(1)
-				prog.Hide()
-			}()
-
-			prog.Show()
-		}),
-		widget.NewButton("ProgressInfinite", func() {
-			prog := dialog.NewProgressInfinite("MyProgress", "Closes after 5 seconds...", win)
-
-			go func() {
-				time.Sleep(time.Second * 5)
-				prog.Hide()
-			}()
-
-			prog.Show()
-		}),
-		widget.NewButton("File Open With Filter (.txt or .png)", func() {
+		widget.NewButton("File Open With Filter (.jpg or .png)", func() {
 			fd := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
 				if err == nil && reader == nil {
 					return
@@ -82,9 +55,9 @@ func dialogScreen(win fyne.Window) fyne.CanvasObject {
 					return
 				}
 
-				fileOpened(reader)
+				imageOpened(reader)
 			}, win)
-			fd.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".txt"}))
+			fd.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".jpg", ".jpeg"}))
 			fd.Show()
 		}),
 		widget.NewButton("File Save", func() {
@@ -129,46 +102,43 @@ func dialogScreen(win fyne.Window) fyne.CanvasObject {
 			picker.Advanced = true
 			picker.Show()
 		}),
-		widget.NewButton("Custom Dialog (Login Form)", func() {
+		widget.NewButton("Form Dialog (Login Form)", func() {
 			username := widget.NewEntry()
+			username.Validator = validation.NewRegexp(`^[A-Za-z0-9_-]+$`, "username can only contain letters, numbers, '_', and '-'")
 			password := widget.NewPasswordEntry()
-			content := widget.NewForm(widget.NewFormItem("Username", username),
-				widget.NewFormItem("Password", password))
+			password.Validator = validation.NewRegexp(`^[A-Za-z0-9_-]+$`, "password can only contain letters, numbers, '_', and '-'")
+			remember := false
+			items := []*widget.FormItem{
+				widget.NewFormItem("Username", username),
+				widget.NewFormItem("Password", password),
+				widget.NewFormItem("Remember me", widget.NewCheck("", func(checked bool) {
+					remember = checked
+				})),
+			}
 
-			dialog.ShowCustomConfirm("Login...", "Log In", "Cancel", content, func(b bool) {
+			dialog.ShowForm("Login...", "Log In", "Cancel", items, func(b bool) {
 				if !b {
 					return
 				}
+				var rememberText string
+				if remember {
+					rememberText = "and remember this login"
+				}
 
-				log.Println("Please Authenticate", username.Text, password.Text)
+				log.Println("Please Authenticate", username.Text, password.Text, rememberText)
 			}, win)
-		}),
-		widget.NewButton("Text Entry Dialog", func() {
-			dialog.ShowEntryDialog("Text Entry", "Enter some text: ",
-				func(response string) {
-					fmt.Printf("User entered text, response was: %v\n", response)
-				},
-				win)
 		}),
 	))
 }
 
-func fileOpened(f fyne.URIReadCloser) {
+func imageOpened(f fyne.URIReadCloser) {
 	if f == nil {
 		log.Println("Cancelled")
 		return
 	}
+	defer f.Close()
 
-	ext := f.URI().Extension()
-	if ext == ".png" {
-		showImage(f)
-	} else if ext == ".txt" {
-		showText(f)
-	}
-	err := f.Close()
-	if err != nil {
-		fyne.LogError("Failed to close stream", err)
-	}
+	showImage(f)
 }
 
 func fileSaved(f fyne.URIWriteCloser) {
@@ -191,19 +161,6 @@ func loadImage(f fyne.URIReadCloser) *canvas.Image {
 	return canvas.NewImageFromResource(res)
 }
 
-func loadText(f fyne.URIReadCloser) string {
-	data, err := ioutil.ReadAll(f)
-	if err != nil {
-		fyne.LogError("Failed to load text data", err)
-		return ""
-	}
-	if data == nil {
-		return ""
-	}
-
-	return string(data)
-}
-
 func showImage(f fyne.URIReadCloser) {
 	img := loadImage(f)
 	if img == nil {
@@ -213,16 +170,6 @@ func showImage(f fyne.URIReadCloser) {
 
 	w := fyne.CurrentApp().NewWindow(f.URI().Name())
 	w.SetContent(container.NewScroll(img))
-	w.Resize(fyne.NewSize(320, 240))
-	w.Show()
-}
-
-func showText(f fyne.URIReadCloser) {
-	text := widget.NewLabel(loadText(f))
-	text.Wrapping = fyne.TextWrapWord
-
-	w := fyne.CurrentApp().NewWindow(f.URI().Name())
-	w.SetContent(container.NewScroll(text))
 	w.Resize(fyne.NewSize(320, 240))
 	w.Show()
 }

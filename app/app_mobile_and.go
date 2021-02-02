@@ -20,12 +20,12 @@ import (
 
 	mobileApp "github.com/fyne-io/mobile/app"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/theme"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/theme"
 )
 
-func defaultTheme() fyne.Theme {
-	return theme.LightTheme()
+func defaultVariant() fyne.ThemeVariant {
+	return theme.VariantLight
 }
 
 func (app *fyneApp) OpenURL(url *url.URL) error {

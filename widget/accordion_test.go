@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/layout"
-	"fyne.io/fyne/test"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -31,12 +31,11 @@ func TestAccordion_Append(t *testing.T) {
 	assert.Equal(t, 1, len(ac.Items))
 }
 
-func TestAccordionContainer_ChangeTheme(t *testing.T) {
-	app := test.NewApp()
+func TestAccordion_ChangeTheme(t *testing.T) {
+	test.NewApp()
 	defer test.NewApp()
-	app.Settings().SetTheme(theme.LightTheme())
 
-	ac := widget.NewAccordionContainer()
+	ac := widget.NewAccordion()
 	ac.Append(widget.NewAccordionItem("foo0", widget.NewLabel("foobar0")))
 	ac.Append(widget.NewAccordionItem("foo1", widget.NewLabel("foobar1")))
 
@@ -54,7 +53,7 @@ func TestAccordionContainer_ChangeTheme(t *testing.T) {
 	})
 }
 
-func TestAccordionContainer_Close(t *testing.T) {
+func TestAccordion_Close(t *testing.T) {
 	t.Run("Exists", func(t *testing.T) {
 		ac := widget.NewAccordion()
 		ac.Append(&widget.AccordionItem{
@@ -102,7 +101,6 @@ func TestAccordion_CloseAll(t *testing.T) {
 
 func TestAccordion_Layout(t *testing.T) {
 	test.NewApp()
-	test.ApplyTheme(t, theme.LightTheme())
 
 	for name, tt := range map[string]struct {
 		multiOpen bool
@@ -212,7 +210,7 @@ func TestAccordion_Layout(t *testing.T) {
 			window := test.NewWindow(fyne.NewContainerWithLayout(layout.NewCenterLayout(), accordion))
 			window.Resize(accordion.MinSize().Max(fyne.NewSize(150, 200)))
 
-			test.AssertImageMatches(t, "accordion/layout_"+name+".png", window.Canvas().Capture())
+			test.AssertRendersToMarkup(t, "accordion/layout_"+name+".xml", window.Canvas())
 
 			window.Close()
 		})
@@ -228,10 +226,10 @@ func TestAccordion_MinSize(t *testing.T) {
 	minSizeB.Height = fyne.Max(minSizeB.Height, theme.IconInlineSize()) + theme.Padding()*2
 	minSize1 := fyne.MeasureText("111111", theme.TextSize(), fyne.TextStyle{})
 	minSize1.Width += theme.Padding() * 2
-	minSize1.Height += theme.Padding() * 2
+	minSize1.Height += theme.Padding() * 4
 	minSize2 := fyne.MeasureText("2222222222", theme.TextSize(), fyne.TextStyle{})
 	minSize2.Width += theme.Padding() * 2
-	minSize2.Height += theme.Padding() * 2
+	minSize2.Height += theme.Padding() * 4
 
 	minWidthA1 := fyne.Max(minSizeA.Width, minSize1.Width)
 	minWidthB2 := fyne.Max(minSizeB.Width, minSize2.Width)

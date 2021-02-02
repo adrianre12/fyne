@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/driver/desktop"
-	"fyne.io/fyne/test"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -124,7 +124,6 @@ func TestButton_Disabled(t *testing.T) {
 func TestButton_Layout(t *testing.T) {
 	test.NewApp()
 	defer test.NewApp()
-	test.ApplyTheme(t, theme.LightTheme())
 
 	for name, tt := range map[string]struct {
 		text      string
@@ -238,19 +237,17 @@ func TestButton_Layout(t *testing.T) {
 			}
 
 			window := test.NewWindow(button)
+			defer window.Close()
 			window.Resize(button.MinSize().Max(fyne.NewSize(150, 200)))
 
-			test.AssertImageMatches(t, "button/layout_"+name+".png", window.Canvas().Capture())
-
-			window.Close()
+			test.AssertRendersToMarkup(t, "button/layout_"+name+".xml", window.Canvas())
 		})
 	}
 }
 
 func TestButton_ChangeTheme(t *testing.T) {
-	app := test.NewApp()
+	test.NewApp()
 	defer test.NewApp()
-	app.Settings().SetTheme(theme.LightTheme())
 
 	b := widget.NewButton("Test", func() {})
 	w := test.NewWindow(b)

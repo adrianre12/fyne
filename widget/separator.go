@@ -1,10 +1,10 @@
 package widget
 
 import (
-	"fyne.io/fyne"
-	"fyne.io/fyne/canvas"
-	"fyne.io/fyne/internal/widget"
-	"fyne.io/fyne/theme"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/internal/widget"
+	"fyne.io/fyne/v2/theme"
 )
 
 var _ fyne.Widget = (*Separator)(nil)
@@ -27,7 +27,7 @@ func NewSeparator() *Separator {
 //
 // Implements: fyne.Widget
 func (s *Separator) CreateRenderer() fyne.WidgetRenderer {
-	bar := canvas.NewRectangle(theme.DisabledTextColor())
+	bar := canvas.NewRectangle(theme.DisabledColor())
 	objects := []fyne.CanvasObject{bar}
 	return &separatorRenderer{
 		BaseRenderer: widget.NewBaseRenderer(objects),
@@ -47,7 +47,8 @@ func (s *Separator) Hide() {
 //
 // Implements: fyne.Widget
 func (s *Separator) MinSize() fyne.Size {
-	return fyne.NewSize(1, 1)
+	t := theme.SeparatorThicknessSize()
+	return fyne.NewSize(t, t)
 }
 
 // Move sets the position of the separator relative to its parent.
@@ -91,10 +92,11 @@ func (r *separatorRenderer) Layout(size fyne.Size) {
 }
 
 func (r *separatorRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(1, 1)
+	t := theme.SeparatorThicknessSize()
+	return fyne.NewSize(t, t)
 }
 
 func (r *separatorRenderer) Refresh() {
-	r.bar.FillColor = theme.DisabledTextColor()
+	r.bar.FillColor = theme.DisabledColor()
 	canvas.Refresh(r.d)
 }

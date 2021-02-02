@@ -1,15 +1,15 @@
 // Package test provides utility drivers for running UI tests without rendering
-package test // import "fyne.io/fyne/test"
+package test // import "fyne.io/fyne/v2/test"
 
 import (
 	"net/url"
 	"sync"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/internal"
-	"fyne.io/fyne/internal/app"
-	"fyne.io/fyne/internal/painter"
-	"fyne.io/fyne/theme"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/internal"
+	"fyne.io/fyne/v2/internal/app"
+	"fyne.io/fyne/v2/internal/painter"
+	"fyne.io/fyne/v2/theme"
 )
 
 // ensure we have a dummy app loaded and ready to test
@@ -91,9 +91,10 @@ func (a *testApp) lastAppliedTheme() fyne.Theme {
 // NewApp returns a new dummy app used for testing.
 // It loads a test driver which creates a virtual window in memory for testing.
 func NewApp() fyne.App {
-	settings := &testSettings{scale: 1.0}
+	settings := &testSettings{scale: 1.0, theme: Theme()}
 	prefs := internal.NewInMemoryPreferences()
 	test := &testApp{settings: settings, prefs: prefs, storage: &testStorage{}, driver: NewDriver().(*testDriver)}
+	painter.SvgCacheReset()
 	fyne.SetCurrentApp(test)
 
 	listener := make(chan fyne.Settings)
@@ -152,6 +153,10 @@ func (s *testSettings) Theme() fyne.Theme {
 	}
 
 	return s.theme
+}
+
+func (s *testSettings) ThemeVariant() fyne.ThemeVariant {
+	return 2 // not a preference
 }
 
 func (s *testSettings) Scale() float32 {

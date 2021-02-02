@@ -1,11 +1,11 @@
-module fyne.io/fyne
+module fyne.io/fyne/v2
 
 go 1.12
 
 require (
 	github.com/Kodeworks/golang-image-ico v0.0.0-20141118225523-73f0f4cfade9
 	github.com/akavel/rsrc v0.8.0 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/fredbi/uri v0.0.0-20181227131451-3dcfdacbaaf3
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/fyne-io/mobile v0.1.2
 	github.com/go-gl/gl v0.0.0-20190320180904-bf2b1f2f34d7

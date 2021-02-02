@@ -4,17 +4,21 @@ import (
 	"image/color"
 	"testing"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/canvas"
-	"fyne.io/fyne/test"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
+	"github.com/stretchr/testify/assert"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 func TestShowCustom_ApplyTheme(t *testing.T) {
-	test.ApplyTheme(t, theme.DarkTheme())
+	test.NewApp()
+	defer test.NewApp()
+
 	w := test.NewWindow(canvas.NewRectangle(color.Transparent))
-	w.Resize(fyne.NewSize(300, 200))
+	w.Resize(fyne.NewSize(200, 300))
 
 	label := widget.NewLabel("Content")
 	label.Alignment = fyne.TextAlignCenter
@@ -22,8 +26,22 @@ func TestShowCustom_ApplyTheme(t *testing.T) {
 	d := NewCustom("Title", "OK", label, w)
 
 	d.Show()
-	test.AssertImageMatches(t, "dialog-custom-dark.png", w.Canvas().Capture())
+	test.AssertImageMatches(t, "dialog-custom-default.png", w.Canvas().Capture())
 
-	test.ApplyTheme(t, theme.LightTheme())
-	test.AssertImageMatches(t, "dialog-custom-light.png", w.Canvas().Capture())
+	test.ApplyTheme(t, test.NewTheme())
+	test.AssertImageMatches(t, "dialog-custom-ugly.png", w.Canvas().Capture())
+}
+
+func TestShowCustom_Resize(t *testing.T) {
+	w := test.NewWindow(canvas.NewRectangle(color.Transparent))
+	w.Resize(fyne.NewSize(300, 300))
+
+	label := widget.NewLabel("Content")
+	label.Alignment = fyne.TextAlignCenter
+	d := NewCustom("Title", "OK", label, w)
+
+	size := fyne.NewSize(200, 200)
+	d.Resize(size)
+	d.Show()
+	assert.Equal(t, size, d.(*dialog).win.Content.Size().Add(fyne.NewSize(theme.Padding()*2, theme.Padding()*2)))
 }

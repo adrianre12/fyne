@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/sys/windows/registry"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/theme"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/theme"
 )
 
 const notificationTemplate = `$title = "%s"
@@ -49,11 +49,11 @@ func isDark() bool {
 	return useLight == 0
 }
 
-func defaultTheme() fyne.Theme {
+func defaultVariant() fyne.ThemeVariant {
 	if isDark() {
-		return theme.DarkTheme()
+		return theme.VariantDark
 	}
-	return theme.LightTheme()
+	return theme.VariantLight
 }
 
 func rootConfigDir() string {

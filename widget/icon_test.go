@@ -3,17 +3,16 @@ package widget_test
 import (
 	"testing"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/layout"
-	"fyne.io/fyne/test"
-	"fyne.io/fyne/theme"
-	"fyne.io/fyne/widget"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 func TestIcon_Layout(t *testing.T) {
 	test.NewApp()
 	defer test.NewApp()
-	test.ApplyTheme(t, theme.LightTheme())
 
 	for name, tt := range map[string]struct {
 		resource fyne.Resource
@@ -31,7 +30,7 @@ func TestIcon_Layout(t *testing.T) {
 			window := test.NewWindow(fyne.NewContainerWithLayout(layout.NewCenterLayout(), icon))
 			window.Resize(icon.MinSize().Max(fyne.NewSize(150, 200)))
 
-			test.AssertImageMatches(t, "icon/layout_"+name+".png", window.Canvas().Capture())
+			test.AssertRendersToMarkup(t, "icon/layout_"+name+".xml", window.Canvas())
 
 			window.Close()
 		})

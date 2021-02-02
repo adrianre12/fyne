@@ -8,9 +8,12 @@ import (
 	"strings"
 	"sync"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/internal/driver"
-	"fyne.io/fyne/internal/painter"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/internal/animation"
+	"fyne.io/fyne/v2/internal/driver"
+	"fyne.io/fyne/v2/internal/painter"
+	intRepo "fyne.io/fyne/v2/internal/repository"
+	"fyne.io/fyne/v2/storage/repository"
 )
 
 const mainGoroutineID = 1
@@ -30,9 +33,11 @@ type gLDriver struct {
 	device     *glDevice
 	done       chan interface{}
 	drawDone   chan interface{}
+
+	animation *animation.Runner
 }
 
-func (d *gLDriver) RenderedTextSize(text string, size int, style fyne.TextStyle) fyne.Size {
+func (d *gLDriver) RenderedTextSize(text string, size float32, style fyne.TextStyle) fyne.Size {
 	return painter.RenderedTextSize(text, size, style)
 }
 
@@ -123,6 +128,9 @@ func NewGLDriver() fyne.Driver {
 	d := new(gLDriver)
 	d.done = make(chan interface{})
 	d.drawDone = make(chan interface{})
+	d.animation = &animation.Runner{}
+
+	repository.Register("file", intRepo.NewFileRepository())
 
 	return d
 }

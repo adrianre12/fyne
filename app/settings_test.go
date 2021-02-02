@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"fyne.io/fyne"
+	"fyne.io/fyne/v2"
 	"github.com/stretchr/testify/assert"
 
-	"fyne.io/fyne/test"
-	"fyne.io/fyne/theme"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 )
 
 func TestSettingsBuildType(t *testing.T) {
@@ -41,7 +41,7 @@ func TestSettingsLoad(t *testing.T) {
 func TestOverrideTheme(t *testing.T) {
 	set := &settings{}
 	set.setupTheme()
-	assert.Equal(t, defaultTheme(), set.Theme())
+	assert.Equal(t, defaultVariant(), set.ThemeVariant())
 
 	set.schema.ThemeName = "light"
 	set.setupTheme()
@@ -53,7 +53,7 @@ func TestOverrideTheme(t *testing.T) {
 
 	set = &settings{}
 	set.setupTheme()
-	assert.Equal(t, defaultTheme(), set.Theme())
+	assert.Equal(t, defaultVariant(), set.ThemeVariant())
 
 	err := os.Setenv("FYNE_THEME", "light")
 	if err != nil {
