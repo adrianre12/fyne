@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/canvas"
-	"fyne.io/fyne/driver/desktop"
-	"fyne.io/fyne/layout"
-	"fyne.io/fyne/test"
-	"fyne.io/fyne/theme"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,7 +39,7 @@ func TestLentry_MinSize(t *testing.T) {
 	}{
 		"small": {
 			fyne.NewSize(1, 1),
-			fyne.NewSize(scrollContainerMinSize, scrollContainerMinSize),
+			fyne.NewSize(float32(32), float32(32)),
 		},
 		"large": {
 			fyne.NewSize(100, 100),
@@ -60,9 +61,8 @@ func TestLentry_MinSize(t *testing.T) {
 }
 
 func TestLentry_Resize(t *testing.T) {
-	lentry := createLentry(1000)
-	w := test.NewWindow(lentry)
-	w.Resize(fyne.NewSize(200, 400))
+	defer test.NewApp()
+	lentry, w := setupLentry(t)
 	template := newLentryItem(fyne.NewContainerWithLayout(layout.NewHBoxLayout(), NewIcon(theme.DocumentIcon()), NewLabel("Template Object")), nil)
 
 	firstItemIndex := test.WidgetRenderer(lentry).(*lentryRenderer).firstItemIndex
@@ -70,7 +70,6 @@ func TestLentry_Resize(t *testing.T) {
 	visibleCount := len(test.WidgetRenderer(lentry).(*lentryRenderer).children)
 	assert.Equal(t, 0, firstItemIndex)
 	assert.Equal(t, visibleCount, lastItemIndex-firstItemIndex+1)
-	test.AssertImageMatches(t, "lentry/lentry_initial.png", w.Canvas().Capture())
 
 	w.Resize(fyne.NewSize(200, 600))
 
@@ -85,10 +84,13 @@ func TestLentry_Resize(t *testing.T) {
 	assert.Equal(t, newLastItemIndex, lastItemIndex+indexChange)
 	assert.NotEqual(t, visibleCount, newVisibleCount)
 	assert.Equal(t, newVisibleCount, newLastItemIndex-newFirstItemIndex+1)
-	test.AssertImageMatches(t, "lentry/lentry_resized.png", w.Canvas().Capture())
+	test.AssertRendersToMarkup(t, "lentry/resized.xml", w.Canvas())
 }
 
 func TestLentry_OffsetChange(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+
 	lentry := createLentry(1000)
 	w := test.NewWindow(lentry)
 	w.Resize(fyne.NewSize(200, 400))
@@ -100,10 +102,9 @@ func TestLentry_OffsetChange(t *testing.T) {
 
 	assert.Equal(t, 0, firstItemIndex)
 	assert.Equal(t, visibleCount, lastItemIndex-firstItemIndex)
-	test.AssertImageMatches(t, "lentry/lentry_initial.png", w.Canvas().Capture())
 
 	scroll := test.WidgetRenderer(lentry).(*lentryRenderer).scroller
-	scroll.Scrolled(&fyne.ScrollEvent{DeltaX: 0, DeltaY: -300})
+	scroll.Scrolled(&fyne.ScrollEvent{Scrolled: fyne.NewDelta(0, -280)})
 
 	indexChange := int(math.Floor(float64(300) / float64(template.MinSize().Height)))
 
@@ -117,7 +118,7 @@ func TestLentry_OffsetChange(t *testing.T) {
 	assert.Equal(t, newLastItemIndex, lastItemIndex+indexChange-1)
 	assert.Equal(t, visibleCount, newVisibleCount)
 	assert.Equal(t, newVisibleCount, newLastItemIndex-newFirstItemIndex)
-	test.AssertImageMatches(t, "lentry/lentry_offset_changed.png", w.Canvas().Capture())
+	test.AssertRendersToMarkup(t, "lentry/offset_changed.xml", w.Canvas())
 }
 
 func TestLentry_Hover(t *testing.T) {
@@ -125,11 +126,11 @@ func TestLentry_Hover(t *testing.T) {
 	children := test.WidgetRenderer(lentry).(*lentryRenderer).children
 
 	for i := 0; i < 2; i++ {
-		assert.Equal(t, children[i].(*lentryItem).statusIndicator.FillColor, theme.BackgroundColor())
+		assert.False(t, children[i].(*lentryItem).statusIndicator.Visible())
 		children[i].(*lentryItem).MouseIn(&desktop.MouseEvent{})
 		assert.Equal(t, children[i].(*lentryItem).statusIndicator.FillColor, theme.HoverColor())
 		children[i].(*lentryItem).MouseOut()
-		assert.Equal(t, children[i].(*lentryItem).statusIndicator.FillColor, theme.BackgroundColor())
+		assert.False(t, children[i].(*lentryItem).statusIndicator.Visible())
 	}
 }
 
@@ -137,16 +138,18 @@ func TestLentry_Selection(t *testing.T) {
 	lentry := createLentry(1000)
 	children := test.WidgetRenderer(lentry).(*lentryRenderer).children
 
-	assert.Equal(t, children[0].(*lentryItem).statusIndicator.FillColor, theme.BackgroundColor())
+	assert.False(t, children[0].(*lentryItem).statusIndicator.Visible())
 	children[0].(*lentryItem).Tapped(&fyne.PointEvent{})
-	assert.Equal(t, children[0].(*lentryItem).statusIndicator.FillColor, theme.FocusColor())
+	assert.Equal(t, children[0].(*lentryItem).statusIndicator.FillColor, theme.PrimaryColor())
+	assert.True(t, children[0].(*lentryItem).statusIndicator.Visible())
 	assert.Equal(t, 1, len(lentry.selected))
 	assert.Equal(t, 0, lentry.selected[0])
 	children[1].(*lentryItem).Tapped(&fyne.PointEvent{})
-	assert.Equal(t, children[1].(*lentryItem).statusIndicator.FillColor, theme.FocusColor())
+	assert.Equal(t, children[1].(*lentryItem).statusIndicator.FillColor, theme.PrimaryColor())
+	assert.True(t, children[1].(*lentryItem).statusIndicator.Visible())
 	assert.Equal(t, 1, len(lentry.selected))
 	assert.Equal(t, 1, lentry.selected[0])
-	assert.Equal(t, children[0].(*lentryItem).statusIndicator.FillColor, theme.BackgroundColor())
+	assert.False(t, children[0].(*lentryItem).statusIndicator.Visible())
 }
 
 func TestLentry_Select(t *testing.T) {
@@ -156,18 +159,21 @@ func TestLentry_Select(t *testing.T) {
 	lentry.Select(50)
 	assert.Equal(t, test.WidgetRenderer(lentry).(*lentryRenderer).lastItemIndex, 50)
 	children := test.WidgetRenderer(lentry).(*lentryRenderer).children
-	assert.Equal(t, children[len(children)-1].(*lentryItem).statusIndicator.FillColor, theme.FocusColor())
+	assert.Equal(t, children[len(children)-1].(*lentryItem).statusIndicator.FillColor, theme.PrimaryColor())
+	assert.True(t, children[len(children)-1].(*lentryItem).statusIndicator.Visible())
 
 	lentry.Select(5)
 	assert.Equal(t, test.WidgetRenderer(lentry).(*lentryRenderer).firstItemIndex, 5)
 	children = test.WidgetRenderer(lentry).(*lentryRenderer).children
-	assert.Equal(t, children[0].(*lentryItem).statusIndicator.FillColor, theme.FocusColor())
+	assert.Equal(t, children[0].(*lentryItem).statusIndicator.FillColor, theme.PrimaryColor())
+	assert.True(t, children[0].(*lentryItem).statusIndicator.Visible())
 
 	lentry.Select(6)
 	assert.Equal(t, test.WidgetRenderer(lentry).(*lentryRenderer).firstItemIndex, 5)
 	children = test.WidgetRenderer(lentry).(*lentryRenderer).children
-	assert.Equal(t, children[0].(*lentryItem).statusIndicator.FillColor, theme.BackgroundColor())
-	assert.Equal(t, children[1].(*lentryItem).statusIndicator.FillColor, theme.FocusColor())
+	assert.False(t, children[0].(*lentryItem).statusIndicator.Visible())
+	assert.Equal(t, children[1].(*lentryItem).statusIndicator.FillColor, theme.PrimaryColor())
+	assert.True(t, children[1].(*lentryItem).statusIndicator.Visible())
 }
 
 func TestLentry_Unselect(t *testing.T) {
@@ -175,33 +181,33 @@ func TestLentry_Unselect(t *testing.T) {
 
 	lentry.Select(10)
 	children := test.WidgetRenderer(lentry).(*lentryRenderer).children
-	assert.Equal(t, children[10].(*lentryItem).statusIndicator.FillColor, theme.FocusColor())
+	assert.Equal(t, children[10].(*lentryItem).statusIndicator.FillColor, theme.PrimaryColor())
+	assert.True(t, children[10].(*lentryItem).statusIndicator.Visible())
 
 	lentry.Unselect(10)
 	children = test.WidgetRenderer(lentry).(*lentryRenderer).children
-	assert.Equal(t, children[10].(*lentryItem).statusIndicator.FillColor, theme.BackgroundColor())
+	assert.False(t, children[10].(*lentryItem).statusIndicator.Visible())
 	assert.Nil(t, lentry.selected)
 }
 
 func TestLentry_DataChange(t *testing.T) {
-	lentry := createLentry(1000)
-	w := test.NewWindow(lentry)
-	w.Resize(fyne.NewSize(200, 400))
+	test.NewApp()
+	defer test.NewApp()
+
+	lentry, w := setupLentry(t)
 	children := test.WidgetRenderer(lentry).(*lentryRenderer).children
 
 	assert.Equal(t, children[0].(*lentryItem).child.(*fyne.Container).Objects[1].(*Label).Text, "Test Item 0")
-	test.AssertImageMatches(t, "lentry/lentry_initial.png", w.Canvas().Capture())
 	changeLentryData(lentry)
 	lentry.Refresh()
 	children = test.WidgetRenderer(lentry).(*lentryRenderer).children
 	assert.Equal(t, children[0].(*lentryItem).child.(*fyne.Container).Objects[1].(*Label).Text, "a")
-	test.AssertImageMatches(t, "lentry/lentry_new_data.png", w.Canvas().Capture())
+	test.AssertRendersToMarkup(t, "lentry/new_data.xml", w.Canvas())
 }
 
 func TestLentry_ThemeChange(t *testing.T) {
-	lentry := createLentry(1000)
-	w := test.NewWindow(lentry)
-	w.Resize(fyne.NewSize(200, 400))
+	defer test.NewApp()
+	lentry, w := setupLentry(t)
 
 	test.AssertImageMatches(t, "lentry/lentry_initial.png", w.Canvas().Capture())
 
@@ -213,6 +219,9 @@ func TestLentry_ThemeChange(t *testing.T) {
 }
 
 func TestLentry_SmallLentry(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+
 	var data []string
 	data = append(data, "Test Item 0")
 
@@ -239,13 +248,12 @@ func TestLentry_SmallLentry(t *testing.T) {
 	visibleCount = len(test.WidgetRenderer(lentry).(*lentryRenderer).children)
 	assert.Equal(t, visibleCount, 2)
 
-	test.AssertImageMatches(t, "lentry/lentry_small_list.png", w.Canvas().Capture())
+	test.AssertRendersToMarkup(t, "lentry/small.xml", w.Canvas())
 }
 
 func TestLentry_ClearLentry(t *testing.T) {
-	lentry := createLentry(1000)
-	w := test.NewWindow(lentry)
-	w.Resize(fyne.NewSize(200, 400))
+	defer test.NewApp()
+	lentry, w := setupLentry(t)
 	assert.Equal(t, 1000, lentry.Length())
 
 	firstItemIndex := test.WidgetRenderer(lentry).(*lentryRenderer).firstItemIndex
@@ -263,10 +271,13 @@ func TestLentry_ClearLentry(t *testing.T) {
 
 	assert.Equal(t, visibleCount, 0)
 
-	test.AssertImageMatches(t, "lentry/lentry_cleared.png", w.Canvas().Capture())
+	test.AssertRendersToMarkup(t, "lentry/cleared.xml", w.Canvas())
 }
 
 func TestLentry_RemoveItem(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+
 	var data []string
 	data = append(data, "Test Item 0")
 	data = append(data, "Test Item 1")
@@ -294,7 +305,7 @@ func TestLentry_RemoveItem(t *testing.T) {
 
 	visibleCount = len(test.WidgetRenderer(lentry).(*lentryRenderer).children)
 	assert.Equal(t, visibleCount, 2)
-	test.AssertImageMatches(t, "lentry/lentry_item_removed.png", w.Canvas().Capture())
+	test.AssertRendersToMarkup(t, "lentry/item_removed.xml", w.Canvas())
 }
 
 func TestLentry_NoFunctionsSet(t *testing.T) {
@@ -333,4 +344,13 @@ func changeLentryData(lentry *Lentry) {
 	lentry.UpdateItem = func(id LentryItemID, item fyne.CanvasObject) {
 		item.(*fyne.Container).Objects[1].(*Label).SetText(data[id])
 	}
+}
+
+func setupLentry(t *testing.T) (*Lentry, fyne.Window) {
+	test.NewApp()
+	lentry := createLentry(1000)
+	w := test.NewWindow(lentry)
+	w.Resize(fyne.NewSize(200, 400))
+	test.AssertRendersToMarkup(t, "lentry/initial.xml", w.Canvas())
+	return lentry, w
 }

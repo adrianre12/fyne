@@ -1,19 +1,19 @@
 package widget
 
 import (
+	"fmt"
 	"math"
 
-	"fyne.io/fyne"
-	"fyne.io/fyne/canvas"
-	"fyne.io/fyne/driver/desktop"
-	"fyne.io/fyne/internal/widget"
-	"fyne.io/fyne/theme"
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/internal/widget"
+	"fyne.io/fyne/v2/theme"
 )
 
 // LentryItemID uniquely identifies an item within a lentry.
 type LentryItemID = int
-
-const lentryDividerHeight = 1
 
 // Declare conformity with Widget interface.
 var _ fyne.Widget = (*Lentry)(nil)
@@ -32,10 +32,11 @@ type Lentry struct {
 	OnSelected   func(id LentryItemID)
 	OnUnselected func(id LentryItemID)
 
-	scroller *ScrollContainer
-	selected []LentryItemID
-	itemMin  fyne.Size
-	offsetY  int
+	scroller      *widget.Scroll
+	selected      []LentryItemID
+	itemMin       fyne.Size
+	offsetY       float32
+	offsetUpdated func(fyne.Position)
 }
 
 // NewLentry creates and returns a lentry widget for displaying items in
@@ -46,6 +47,26 @@ func NewLentry(length func() int, createItem func() fyne.CanvasObject, updateIte
 	lentry := &Lentry{BaseWidget: BaseWidget{}, Length: length, CreateItem: createItem, UpdateItem: updateItem}
 	lentry.ExtendBaseWidget(lentry)
 	return lentry
+}
+
+// NewLentryWithData creates a new list widget that will display the contents of the provided data.
+//
+// Since: 2.0
+func NewLentryWithData(data binding.DataList, createItem func() fyne.CanvasObject, updateItem func(binding.DataItem, fyne.CanvasObject)) *Lentry {
+	l := NewLentry(
+		data.Length,
+		createItem,
+		func(i LentryItemID, o fyne.CanvasObject) {
+			item, err := data.GetItem(i)
+			if err != nil {
+				fyne.LogError(fmt.Sprintf("Error getting data item %d", i), err)
+				return
+			}
+			updateItem(item, o)
+		})
+
+	data.AddListener(binding.NewDataListener(l.Refresh))
+	return l
 }
 
 // CreateRenderer is a private method to Fyne which links this widget to its renderer.
@@ -59,9 +80,11 @@ func (l *Lentry) CreateRenderer() fyne.WidgetRenderer {
 	}
 	layout := fyne.NewContainerWithLayout(newLentryLayout(l))
 	layout.Resize(layout.MinSize())
-	l.scroller = NewVScrollContainer(layout)
+	l.scroller = widget.NewVScroll(layout)
 	objects := []fyne.CanvasObject{l.scroller}
-	return NewLentryRenderer(objects, l, l.scroller, layout)
+	lr := newLentryRenderer(objects, l, l.scroller, layout)
+	l.offsetUpdated = lr.offsetUpdated
+	return lr
 }
 
 // MinSize returns the size that this widget should not shrink below.
@@ -96,13 +119,13 @@ func (l *Lentry) Select(id LentryItemID) {
 	if l.scroller == nil {
 		return
 	}
-	y := (id * l.itemMin.Height) + (id * lentryDividerHeight)
+	y := (float32(id) * l.itemMin.Height) + (float32(id) * theme.SeparatorThicknessSize())
 	if y < l.scroller.Offset.Y {
 		l.scroller.Offset.Y = y
 	} else if y+l.itemMin.Height > l.scroller.Offset.Y+l.scroller.Size().Height {
 		l.scroller.Offset.Y = y + l.itemMin.Height - l.scroller.Size().Height
 	}
-	l.scroller.onOffsetChanged()
+	l.offsetUpdated(l.scroller.Offset)
 	l.Refresh()
 }
 
@@ -126,7 +149,7 @@ type lentryRenderer struct {
 	widget.BaseRenderer
 
 	lentry           *Lentry
-	scroller         *ScrollContainer
+	scroller         *widget.Scroll
 	layout           *fyne.Container
 	itemPool         *syncPool
 	children         []fyne.CanvasObject
@@ -134,18 +157,12 @@ type lentryRenderer struct {
 	visibleItemCount int
 	firstItemIndex   LentryItemID
 	lastItemIndex    LentryItemID
-	previousOffsetY  int
+	previousOffsetY  float32
 }
 
-func NewLentryRenderer(objects []fyne.CanvasObject, l *Lentry, scroller *ScrollContainer, layout *fyne.Container) *lentryRenderer {
+func newLentryRenderer(objects []fyne.CanvasObject, l *Lentry, scroller *widget.Scroll, layout *fyne.Container) *lentryRenderer {
 	lr := &lentryRenderer{BaseRenderer: widget.NewBaseRenderer(objects), lentry: l, scroller: scroller, layout: layout}
-	lr.scroller.onOffsetChanged = func() {
-		if lr.lentry.offsetY == lr.scroller.Offset.Y {
-			return
-		}
-		lr.lentry.offsetY = lr.scroller.Offset.Y
-		lr.offsetChanged()
-	}
+	lr.scroller.OnScrolled = lr.offsetUpdated
 	return lr
 }
 
@@ -185,11 +202,11 @@ func (l *lentryRenderer) Layout(size fyne.Size) {
 	}
 
 	// Relayout What Is Visible - no scroll change - initial layout or possibly from a resize.
-	l.visibleItemCount = int(math.Ceil(float64(l.scroller.size.Height) / float64(l.lentry.itemMin.Height+lentryDividerHeight)))
+	l.visibleItemCount = int(math.Ceil(float64(l.scroller.Size().Height) / float64(l.lentry.itemMin.Height+theme.SeparatorThicknessSize())))
 	if l.visibleItemCount <= 0 {
 		return
 	}
-	min := fyne.Min(length, l.visibleItemCount)
+	min := int(fyne.Min(float32(length), float32(l.visibleItemCount)))
 	if len(l.children) > min {
 		for i := len(l.children); i >= min; i-- {
 			l.itemPool.Release(l.children[i-1])
@@ -247,7 +264,7 @@ func (l *lentryRenderer) getItem() fyne.CanvasObject {
 }
 
 func (l *lentryRenderer) offsetChanged() {
-	offsetChange := int(math.Abs(float64(l.previousOffsetY - l.lentry.offsetY)))
+	offsetChange := float32(math.Abs(float64(l.previousOffsetY - l.lentry.offsetY)))
 
 	if l.previousOffsetY < l.lentry.offsetY {
 		// Scrolling Down.
@@ -268,16 +285,17 @@ func (l *lentryRenderer) prependItem(id LentryItemID) {
 	l.layout.Objects = l.layout.Layout.(*lentryLayout).getObjects()
 }
 
-func (l *lentryRenderer) scrollDown(offsetChange int) {
+func (l *lentryRenderer) scrollDown(offsetChange float32) {
 	itemChange := 0
-	layoutEndY := l.children[len(l.children)-1].Position().Y + l.lentry.itemMin.Height + lentryDividerHeight
+	separatorThickness := theme.SeparatorThicknessSize()
+	layoutEndY := l.children[len(l.children)-1].Position().Y + l.lentry.itemMin.Height + separatorThickness
 	scrollerEndY := l.scroller.Offset.Y + l.scroller.Size().Height
 	if layoutEndY < scrollerEndY {
-		itemChange = int(math.Ceil(float64(scrollerEndY-layoutEndY) / float64(l.lentry.itemMin.Height+lentryDividerHeight)))
-	} else if offsetChange < l.lentry.itemMin.Height+lentryDividerHeight {
+		itemChange = int(math.Ceil(float64(scrollerEndY-layoutEndY) / float64(l.lentry.itemMin.Height+separatorThickness)))
+	} else if offsetChange < l.lentry.itemMin.Height+separatorThickness {
 		return
 	} else {
-		itemChange = int(math.Floor(float64(offsetChange) / float64(l.lentry.itemMin.Height+lentryDividerHeight)))
+		itemChange = int(math.Floor(float64(offsetChange) / float64(l.lentry.itemMin.Height+separatorThickness)))
 	}
 	l.previousOffsetY = l.lentry.offsetY
 	length := 0
@@ -296,15 +314,16 @@ func (l *lentryRenderer) scrollDown(offsetChange int) {
 	}
 }
 
-func (l *lentryRenderer) scrollUp(offsetChange int) {
+func (l *lentryRenderer) scrollUp(offsetChange float32) {
 	itemChange := 0
 	layoutStartY := l.children[0].Position().Y
+	separatorThickness := theme.SeparatorThicknessSize()
 	if layoutStartY > l.scroller.Offset.Y {
-		itemChange = int(math.Ceil(float64(layoutStartY-l.scroller.Offset.Y) / float64(l.lentry.itemMin.Height+lentryDividerHeight)))
-	} else if offsetChange < l.lentry.itemMin.Height+lentryDividerHeight {
+		itemChange = int(math.Ceil(float64(layoutStartY-l.scroller.Offset.Y) / float64(l.lentry.itemMin.Height+separatorThickness)))
+	} else if offsetChange < l.lentry.itemMin.Height+separatorThickness {
 		return
 	} else {
-		itemChange = int(math.Floor(float64(offsetChange) / float64(l.lentry.itemMin.Height+lentryDividerHeight)))
+		itemChange = int(math.Floor(float64(offsetChange) / float64(l.lentry.itemMin.Height+separatorThickness)))
 	}
 	l.previousOffsetY = l.lentry.offsetY
 	for i := 0; i < itemChange && l.firstItemIndex != 0; i++ {
@@ -336,6 +355,14 @@ func (l *lentryRenderer) setupLentryItem(item fyne.CanvasObject, id LentryItemID
 	}
 }
 
+func (l *lentryRenderer) offsetUpdated(pos fyne.Position) {
+	if l.lentry.offsetY == pos.Y {
+		return
+	}
+	l.lentry.offsetY = pos.Y
+	l.offsetChanged()
+}
+
 // Declare conformity with interfaces.
 var _ fyne.Widget = (*lentryItem)(nil)
 var _ fyne.Tappable = (*lentryItem)(nil)
@@ -365,6 +392,7 @@ func (li *lentryItem) CreateRenderer() fyne.WidgetRenderer {
 	li.ExtendBaseWidget(li)
 
 	li.statusIndicator = canvas.NewRectangle(theme.BackgroundColor())
+	li.statusIndicator.Hide()
 
 	objects := []fyne.CanvasObject{li.statusIndicator, li.child}
 
@@ -433,12 +461,15 @@ func (li *lentryItemRenderer) Layout(size fyne.Size) {
 
 func (li *lentryItemRenderer) Refresh() {
 	if li.item.selected {
-		li.item.statusIndicator.FillColor = theme.FocusColor()
+		li.item.statusIndicator.FillColor = theme.PrimaryColor()
+		li.item.statusIndicator.Show()
 	} else if li.item.hovered {
 		li.item.statusIndicator.FillColor = theme.HoverColor()
+		li.item.statusIndicator.Show()
 	} else {
-		li.item.statusIndicator.FillColor = theme.BackgroundColor()
+		li.item.statusIndicator.Hide()
 	}
+	li.item.statusIndicator.Refresh()
 	canvas.Refresh(li.item.super())
 }
 
@@ -449,7 +480,7 @@ type lentryLayout struct {
 	lentry     *Lentry
 	dividers   []fyne.CanvasObject
 	children   []fyne.CanvasObject
-	layoutEndY int
+	layoutEndY float32
 }
 
 func newLentryLayout(lentry *Lentry) fyne.Layout {
@@ -460,10 +491,10 @@ func (l *lentryLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	if l.lentry.offsetY != 0 {
 		return
 	}
-	y := 0
+	y := float32(0)
 	for _, child := range l.children {
 		child.Move(fyne.NewPos(0, y))
-		y += l.lentry.itemMin.Height + lentryDividerHeight
+		y += l.lentry.itemMin.Height + theme.SeparatorThicknessSize()
 		child.Resize(fyne.NewSize(l.lentry.size.Width, l.lentry.itemMin.Height))
 	}
 	l.layoutEndY = y
@@ -472,8 +503,9 @@ func (l *lentryLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 
 func (l *lentryLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	if f := l.lentry.Length; f != nil {
+		separatorThickness := theme.SeparatorThicknessSize()
 		return fyne.NewSize(l.lentry.itemMin.Width,
-			(l.lentry.itemMin.Height+lentryDividerHeight)*f()-lentryDividerHeight)
+			(l.lentry.itemMin.Height+separatorThickness)*float32(f())-separatorThickness)
 	}
 	return fyne.NewSize(0, 0)
 }
@@ -486,7 +518,7 @@ func (l *lentryLayout) getObjects() []fyne.CanvasObject {
 
 func (l *lentryLayout) appendedItem(objects []fyne.CanvasObject) {
 	if len(objects) > 1 {
-		objects[len(objects)-1].Move(fyne.NewPos(0, objects[len(objects)-2].Position().Y+l.lentry.itemMin.Height+lentryDividerHeight))
+		objects[len(objects)-1].Move(fyne.NewPos(0, objects[len(objects)-2].Position().Y+l.lentry.itemMin.Height+theme.SeparatorThicknessSize()))
 	} else {
 		objects[len(objects)-1].Move(fyne.NewPos(0, 0))
 	}
@@ -494,7 +526,7 @@ func (l *lentryLayout) appendedItem(objects []fyne.CanvasObject) {
 }
 
 func (l *lentryLayout) prependedItem(objects []fyne.CanvasObject) {
-	objects[0].Move(fyne.NewPos(0, objects[1].Position().Y-l.lentry.itemMin.Height-lentryDividerHeight))
+	objects[0].Move(fyne.NewPos(0, objects[1].Position().Y-l.lentry.itemMin.Height-theme.SeparatorThicknessSize()))
 	objects[0].Resize(fyne.NewSize(l.lentry.size.Width, l.lentry.itemMin.Height))
 }
 
@@ -510,12 +542,14 @@ func (l *lentryLayout) updateDividers() {
 	} else {
 		l.dividers = nil
 	}
+
+	separatorThickness := theme.SeparatorThicknessSize()
 	for i, child := range l.children {
 		if i == 0 {
 			continue
 		}
-		l.dividers[i].Move(fyne.NewPos(theme.Padding(), child.Position().Y-lentryDividerHeight))
-		l.dividers[i].Resize(fyne.NewSize(l.lentry.Size().Width-(theme.Padding()*2), lentryDividerHeight))
+		l.dividers[i].Move(fyne.NewPos(theme.Padding(), child.Position().Y-separatorThickness))
+		l.dividers[i].Resize(fyne.NewSize(l.lentry.Size().Width-(theme.Padding()*2), separatorThickness))
 		l.dividers[i].Show()
 	}
 }
