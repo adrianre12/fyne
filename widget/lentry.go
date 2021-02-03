@@ -119,7 +119,7 @@ func (l *Lentry) Select(id LentryItemID) {
 	if l.scroller == nil {
 		return
 	}
-	y := (float32(id) * l.itemMin.Height) + (float32(id) * theme.SeparatorThicknessSize())
+	y := float32(id) * l.itemMin.Height
 	if y < l.scroller.Offset.Y {
 		l.scroller.Offset.Y = y
 	} else if y+l.itemMin.Height > l.scroller.Offset.Y+l.scroller.Size().Height {
@@ -202,7 +202,7 @@ func (l *lentryRenderer) Layout(size fyne.Size) {
 	}
 
 	// Relayout What Is Visible - no scroll change - initial layout or possibly from a resize.
-	l.visibleItemCount = int(math.Ceil(float64(l.scroller.Size().Height) / float64(l.lentry.itemMin.Height+theme.SeparatorThicknessSize())))
+	l.visibleItemCount = int(math.Ceil(float64(l.scroller.Size().Height) / float64(l.lentry.itemMin.Height)))
 	if l.visibleItemCount <= 0 {
 		return
 	}
@@ -273,7 +273,6 @@ func (l *lentryRenderer) offsetChanged() {
 		// Scrolling Up.
 		l.scrollUp(offsetChange)
 	}
-	l.layout.Layout.(*lentryLayout).updateDividers()
 }
 
 func (l *lentryRenderer) prependItem(id LentryItemID) {
@@ -287,15 +286,14 @@ func (l *lentryRenderer) prependItem(id LentryItemID) {
 
 func (l *lentryRenderer) scrollDown(offsetChange float32) {
 	itemChange := 0
-	separatorThickness := theme.SeparatorThicknessSize()
-	layoutEndY := l.children[len(l.children)-1].Position().Y + l.lentry.itemMin.Height + separatorThickness
+	layoutEndY := l.children[len(l.children)-1].Position().Y + l.lentry.itemMin.Height
 	scrollerEndY := l.scroller.Offset.Y + l.scroller.Size().Height
 	if layoutEndY < scrollerEndY {
-		itemChange = int(math.Ceil(float64(scrollerEndY-layoutEndY) / float64(l.lentry.itemMin.Height+separatorThickness)))
-	} else if offsetChange < l.lentry.itemMin.Height+separatorThickness {
+		itemChange = int(math.Ceil(float64(scrollerEndY-layoutEndY) / float64(l.lentry.itemMin.Height)))
+	} else if offsetChange < l.lentry.itemMin.Height {
 		return
 	} else {
-		itemChange = int(math.Floor(float64(offsetChange) / float64(l.lentry.itemMin.Height+separatorThickness)))
+		itemChange = int(math.Floor(float64(offsetChange) / float64(l.lentry.itemMin.Height)))
 	}
 	l.previousOffsetY = l.lentry.offsetY
 	length := 0
@@ -317,13 +315,12 @@ func (l *lentryRenderer) scrollDown(offsetChange float32) {
 func (l *lentryRenderer) scrollUp(offsetChange float32) {
 	itemChange := 0
 	layoutStartY := l.children[0].Position().Y
-	separatorThickness := theme.SeparatorThicknessSize()
 	if layoutStartY > l.scroller.Offset.Y {
-		itemChange = int(math.Ceil(float64(layoutStartY-l.scroller.Offset.Y) / float64(l.lentry.itemMin.Height+separatorThickness)))
-	} else if offsetChange < l.lentry.itemMin.Height+separatorThickness {
+		itemChange = int(math.Ceil(float64(layoutStartY-l.scroller.Offset.Y) / float64(l.lentry.itemMin.Height)))
+	} else if offsetChange < l.lentry.itemMin.Height {
 		return
 	} else {
-		itemChange = int(math.Floor(float64(offsetChange) / float64(l.lentry.itemMin.Height+separatorThickness)))
+		itemChange = int(math.Floor(float64(offsetChange) / float64(l.lentry.itemMin.Height)))
 	}
 	l.previousOffsetY = l.lentry.offsetY
 	for i := 0; i < itemChange && l.firstItemIndex != 0; i++ {
@@ -494,18 +491,15 @@ func (l *lentryLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	y := float32(0)
 	for _, child := range l.children {
 		child.Move(fyne.NewPos(0, y))
-		y += l.lentry.itemMin.Height + theme.SeparatorThicknessSize()
+		y += l.lentry.itemMin.Height
 		child.Resize(fyne.NewSize(l.lentry.size.Width, l.lentry.itemMin.Height))
 	}
 	l.layoutEndY = y
-	l.updateDividers()
 }
 
 func (l *lentryLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	if f := l.lentry.Length; f != nil {
-		separatorThickness := theme.SeparatorThicknessSize()
-		return fyne.NewSize(l.lentry.itemMin.Width,
-			(l.lentry.itemMin.Height+separatorThickness)*float32(f())-separatorThickness)
+		return fyne.NewSize(l.lentry.itemMin.Width, l.lentry.itemMin.Height*float32(f()))
 	}
 	return fyne.NewSize(0, 0)
 }
@@ -518,7 +512,7 @@ func (l *lentryLayout) getObjects() []fyne.CanvasObject {
 
 func (l *lentryLayout) appendedItem(objects []fyne.CanvasObject) {
 	if len(objects) > 1 {
-		objects[len(objects)-1].Move(fyne.NewPos(0, objects[len(objects)-2].Position().Y+l.lentry.itemMin.Height+theme.SeparatorThicknessSize()))
+		objects[len(objects)-1].Move(fyne.NewPos(0, objects[len(objects)-2].Position().Y+l.lentry.itemMin.Height))
 	} else {
 		objects[len(objects)-1].Move(fyne.NewPos(0, 0))
 	}
@@ -526,30 +520,6 @@ func (l *lentryLayout) appendedItem(objects []fyne.CanvasObject) {
 }
 
 func (l *lentryLayout) prependedItem(objects []fyne.CanvasObject) {
-	objects[0].Move(fyne.NewPos(0, objects[1].Position().Y-l.lentry.itemMin.Height-theme.SeparatorThicknessSize()))
+	objects[0].Move(fyne.NewPos(0, objects[1].Position().Y-l.lentry.itemMin.Height))
 	objects[0].Resize(fyne.NewSize(l.lentry.size.Width, l.lentry.itemMin.Height))
-}
-
-func (l *lentryLayout) updateDividers() {
-	if len(l.children) > 1 {
-		if len(l.dividers) > len(l.children) {
-			l.dividers = l.dividers[:len(l.children)]
-		} else {
-			for i := len(l.dividers); i < len(l.children); i++ {
-				l.dividers = append(l.dividers, NewSeparator())
-			}
-		}
-	} else {
-		l.dividers = nil
-	}
-
-	separatorThickness := theme.SeparatorThicknessSize()
-	for i, child := range l.children {
-		if i == 0 {
-			continue
-		}
-		l.dividers[i].Move(fyne.NewPos(theme.Padding(), child.Position().Y-separatorThickness))
-		l.dividers[i].Resize(fyne.NewSize(l.lentry.Size().Width-(theme.Padding()*2), separatorThickness))
-		l.dividers[i].Show()
-	}
 }

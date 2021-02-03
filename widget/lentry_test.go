@@ -73,15 +73,14 @@ func TestLentry_Resize(t *testing.T) {
 
 	w.Resize(fyne.NewSize(200, 600))
 
-	indexChange := int(math.Floor(float64(200) / float64(template.MinSize().Height)))
-
 	newFirstItemIndex := test.WidgetRenderer(lentry).(*lentryRenderer).firstItemIndex
 	newLastItemIndex := test.WidgetRenderer(lentry).(*lentryRenderer).lastItemIndex
 	newVisibleCount := len(test.WidgetRenderer(lentry).(*lentryRenderer).children)
+	expectedNewLastItemIndex := int(math.Ceil(float64(600)/float64(template.MinSize().Height))) + newFirstItemIndex
 
 	assert.Equal(t, firstItemIndex, newFirstItemIndex)
 	assert.NotEqual(t, lastItemIndex, newLastItemIndex)
-	assert.Equal(t, newLastItemIndex, lastItemIndex+indexChange)
+	assert.Equal(t, expectedNewLastItemIndex, newLastItemIndex)
 	assert.NotEqual(t, visibleCount, newVisibleCount)
 	assert.Equal(t, newVisibleCount, newLastItemIndex-newFirstItemIndex+1)
 	test.AssertRendersToMarkup(t, "lentry/resized.xml", w.Canvas())
