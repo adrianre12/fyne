@@ -9,13 +9,10 @@ import (
 func main() {
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Lentry")
-	data := []string{"a[_", "b[_", "c[_"}
 
-	content := widget.NewLentry(
-		func() int { return len(data) },
-		func() fyne.CanvasObject { return widget.NewLabel("Template") },
-		func(i int, o fyne.CanvasObject) { o.(*widget.Label).SetText(data[i]) },
-	)
+	content := widget.NewLentry("This is a line\nor two of text\neven three\n[X|y[[\n{X|[y_\nThis is a really really long line that should really wrap but may not be long enough yet so i will type a bit more till it is wider than the screen")
+	content.Wrapping = fyne.TextWrapWord
+
 	myWindow.SetContent(content)
 	myWindow.Resize(fyne.NewSize(200.0, 200.0))
 	myWindow.ShowAndRun()

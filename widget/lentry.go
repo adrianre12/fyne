@@ -1,12 +1,14 @@
 package widget
 
 import (
-	"fmt"
+	"image/color"
 	"math"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/data/binding"
+
+	//	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/internal/widget"
 	"fyne.io/fyne/v2/theme"
@@ -25,10 +27,7 @@ var _ fyne.Widget = (*Lentry)(nil)
 // Since: 1.4
 type Lentry struct {
 	BaseWidget
-
-	Length       func() int
-	CreateItem   func() fyne.CanvasObject
-	UpdateItem   func(id LentryItemID, item fyne.CanvasObject)
+	// list stuff
 	OnSelected   func(id LentryItemID)
 	OnUnselected func(id LentryItemID)
 
@@ -37,14 +36,22 @@ type Lentry struct {
 	itemMin       fyne.Size
 	offsetY       float32
 	offsetUpdated func(fyne.Position)
+
+	// entry stuff
+	Text      string
+	provider  *textProvider
+	Password  bool
+	Alignment fyne.TextAlign // The alignment of the Text
+	Wrapping  fyne.TextWrap  // The wrapping of the Text
+	TextStyle fyne.TextStyle // The style of the label text
 }
 
 // NewLentry creates and returns a lentry widget for displaying items in
 // a vertical layout with scrolling and caching for performance.
 //
 // Since: 1.4
-func NewLentry(length func() int, createItem func() fyne.CanvasObject, updateItem func(LentryItemID, fyne.CanvasObject)) *Lentry {
-	lentry := &Lentry{BaseWidget: BaseWidget{}, Length: length, CreateItem: createItem, UpdateItem: updateItem}
+func NewLentry(text string) *Lentry {
+	lentry := &Lentry{BaseWidget: BaseWidget{}, Text: text, Wrapping: fyne.TextTruncate}
 	lentry.ExtendBaseWidget(lentry)
 	return lentry
 }
@@ -52,31 +59,34 @@ func NewLentry(length func() int, createItem func() fyne.CanvasObject, updateIte
 // NewLentryWithData creates a new list widget that will display the contents of the provided data.
 //
 // Since: 2.0
-func NewLentryWithData(data binding.DataList, createItem func() fyne.CanvasObject, updateItem func(binding.DataItem, fyne.CanvasObject)) *Lentry {
-	l := NewLentry(
-		data.Length,
-		createItem,
-		func(i LentryItemID, o fyne.CanvasObject) {
-			item, err := data.GetItem(i)
-			if err != nil {
-				fyne.LogError(fmt.Sprintf("Error getting data item %d", i), err)
-				return
-			}
-			updateItem(item, o)
-		})
+//TODO sort out databinding
+// func NewLentryWithData(data binding.DataList) *Lentry {
+// 	l := NewLentry(
+// 		data.Length,
+// 		createItem,
+// 		func(i LentryItemID, o fyne.CanvasObject) {
+// 			item, err := data.GetItem(i)
+// 			if err != nil {
+// 				fyne.LogError(fmt.Sprintf("Error getting data item %d", i), err)
+// 				return
+// 			}
+// 			updateItem(item, o)
+// 		})
 
-	data.AddListener(binding.NewDataListener(l.Refresh))
-	return l
-}
+// 	data.AddListener(binding.NewDataListener(l.Refresh))
+// 	return l
+// }
 
 // CreateRenderer is a private method to Fyne which links this widget to its renderer.
 func (l *Lentry) CreateRenderer() fyne.WidgetRenderer {
 	l.ExtendBaseWidget(l)
+	// initialise
+	l.provider = newTextProvider(l.Text, l)
+	l.provider.extraPad = fyne.NewSize(0, theme.Padding())
+	l.provider.size = l.size
 
-	if f := l.CreateItem; f != nil {
-		if l.itemMin.IsZero() {
-			l.itemMin = newLentryItem(f(), nil).MinSize()
-		}
+	if l.itemMin.IsZero() {
+		l.itemMin = newLentryItem(nil).MinSize()
 	}
 	layout := fyne.NewContainerWithLayout(newLentryLayout(l))
 	layout.Resize(layout.MinSize())
@@ -140,6 +150,44 @@ func (l *Lentry) Unselect(id LentryItemID) {
 	if f := l.OnUnselected; f != nil {
 		f(id)
 	}
+}
+
+// Length returns the number of rows in the testProvider
+func (l *Lentry) Length() int {
+	return l.provider.rows()
+}
+
+// Declare conformity with textPresenter interface.
+var _ textPresenter = (*Lentry)(nil)
+
+// textAlign tells the rendering textProvider our alignment
+func (l *Lentry) textAlign() fyne.TextAlign {
+	return l.Alignment
+}
+
+// textWrap tells the rendering textProvider our wrapping
+func (l *Lentry) textWrap() fyne.TextWrap {
+	return l.Wrapping
+}
+
+// textStyle tells the rendering textProvider our style
+func (l *Lentry) textStyle() fyne.TextStyle {
+	return l.TextStyle
+}
+
+// textColor tells the rendering textProvider our color
+func (l *Lentry) textColor() color.Color {
+	return theme.ForegroundColor()
+}
+
+// concealed tells the rendering textProvider if we are a concealed field
+func (l *Lentry) concealed() bool {
+	return false
+}
+
+// object returns the root object of the widget so it can be referenced
+func (l *Lentry) object() fyne.Widget {
+	return l.super()
 }
 
 // Declare conformity with WidgetRenderer interface.
@@ -223,9 +271,7 @@ func (l *lentryRenderer) Layout(size fyne.Size) {
 
 	i := l.firstItemIndex
 	for _, child := range l.children {
-		if f := l.lentry.UpdateItem; f != nil {
-			f(i, child.(*lentryItem).child)
-		}
+		child.(*lentryItem).UpdateItem(i, l.lentry.provider)
 		l.setupLentryItem(child, i)
 		i++
 	}
@@ -236,12 +282,31 @@ func (l *lentryRenderer) MinSize() fyne.Size {
 }
 
 func (l *lentryRenderer) Refresh() {
-	if f := l.lentry.CreateItem; f != nil {
-		l.lentry.itemMin = newLentryItem(f(), nil).MinSize()
+	if l.lentry.Text != string(l.lentry.provider.buffer) {
+		l.lentry.provider.setText(l.lentry.Text)
+	} else {
+		l.lentry.provider.updateRowBounds() // if truncate/wrap has changed
 	}
+	l.lentry.itemMin = newLentryItem(nil).MinSize()
+
 	l.Layout(l.lentry.Size())
 	l.scroller.Refresh()
+
+	l.lentry.provider.propertyLock.Lock()
+	l.lentry.provider.updateRowBounds()
+	l.lentry.provider.propertyLock.Unlock()
+
 	canvas.Refresh(l.lentry.super())
+}
+
+// Resize sets a new size for the lentry.
+// Note this should not be used if the widget is being managed by a Layout within a Container.
+func (l *Lentry) Resize(size fyne.Size) {
+	l.BaseWidget.Resize(size)
+	if l.provider == nil { // not created until visible
+		return
+	}
+	l.provider.Resize(size)
 }
 
 func (l *lentryRenderer) appendItem(id LentryItemID) {
@@ -256,9 +321,7 @@ func (l *lentryRenderer) appendItem(id LentryItemID) {
 func (l *lentryRenderer) getItem() fyne.CanvasObject {
 	item := l.itemPool.Obtain()
 	if item == nil {
-		if f := l.lentry.CreateItem; f != nil {
-			item = newLentryItem(f(), nil)
-		}
+		item = newLentryItem(nil)
 	}
 	return item
 }
@@ -344,9 +407,8 @@ func (l *lentryRenderer) setupLentryItem(item fyne.CanvasObject, id LentryItemID
 	if previousIndicator != li.selected {
 		item.Refresh()
 	}
-	if f := l.lentry.UpdateItem; f != nil {
-		f(id, li.child)
-	}
+	li.UpdateItem(id, l.lentry.provider)
+
 	li.onTapped = func() {
 		l.lentry.Select(id)
 	}
@@ -370,14 +432,14 @@ type lentryItem struct {
 
 	onTapped          func()
 	statusIndicator   *canvas.Rectangle
-	child             fyne.CanvasObject
+	textCanvas        *canvas.Text
 	hovered, selected bool
 }
 
-func newLentryItem(child fyne.CanvasObject, tapped func()) *lentryItem {
+func newLentryItem(tapped func()) *lentryItem {
 	li := &lentryItem{
-		child:    child,
-		onTapped: tapped,
+		textCanvas: canvas.NewText("Place Holder", theme.ForegroundColor()),
+		onTapped:   tapped,
 	}
 
 	li.ExtendBaseWidget(li)
@@ -391,7 +453,7 @@ func (li *lentryItem) CreateRenderer() fyne.WidgetRenderer {
 	li.statusIndicator = canvas.NewRectangle(theme.BackgroundColor())
 	li.statusIndicator.Hide()
 
-	objects := []fyne.CanvasObject{li.statusIndicator, li.child}
+	objects := []fyne.CanvasObject{li.statusIndicator, li.textCanvas}
 
 	return &lentryItemRenderer{widget.NewBaseRenderer(objects), li}
 }
@@ -427,6 +489,21 @@ func (li *lentryItem) Tapped(*fyne.PointEvent) {
 	}
 }
 
+//UpdateItem updates the given LentryItem with the row text specified by the id
+func (li *lentryItem) UpdateItem(id LentryItemID, provider *textProvider) {
+	row := provider.row(id)
+	var line string
+	if provider.presenter.concealed() {
+		line = strings.Repeat(passwordChar, len(row))
+	} else {
+		line = string(row)
+	}
+
+	li.textCanvas.Text = line
+	li.textCanvas.Alignment = provider.presenter.textAlign()
+	li.textCanvas.TextStyle = provider.presenter.textStyle()
+}
+
 // Declare conformity with the WidgetRenderer interface.
 var _ fyne.WidgetRenderer = (*lentryItemRenderer)(nil)
 
@@ -439,9 +516,8 @@ type lentryItemRenderer struct {
 // MinSize calculates the minimum size of a lentryItem.
 // This is based on the size of the status indicator and the size of the child object.
 func (li *lentryItemRenderer) MinSize() (size fyne.Size) {
-	itemSize := li.item.child.MinSize()
-	size = fyne.NewSize(itemSize.Width+theme.Padding()*3,
-		itemSize.Height+theme.Padding()*2)
+	itemSize := li.item.textCanvas.MinSize()
+	size = fyne.NewSize(itemSize.Width+theme.Padding()*3, itemSize.Height) //+theme.Padding()*2)
 	return
 }
 
@@ -452,8 +528,8 @@ func (li *lentryItemRenderer) Layout(size fyne.Size) {
 	li.item.statusIndicator.SetMinSize(s)
 	li.item.statusIndicator.Resize(s)
 
-	li.item.child.Move(fyne.NewPos(theme.Padding()*2, theme.Padding()))
-	li.item.child.Resize(fyne.NewSize(size.Width-theme.Padding()*3, size.Height-theme.Padding()*2))
+	li.item.textCanvas.Move(fyne.NewPos(theme.Padding()*2, 0))                         //theme.Padding()))
+	li.item.textCanvas.Resize(fyne.NewSize(size.Width-theme.Padding()*3, size.Height)) //-theme.Padding()*2))
 }
 
 func (li *lentryItemRenderer) Refresh() {
