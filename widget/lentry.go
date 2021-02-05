@@ -502,6 +502,7 @@ func (li *lentryItem) UpdateItem(id LentryItemID, provider *textProvider) {
 	li.textCanvas.Text = line
 	li.textCanvas.Alignment = provider.presenter.textAlign()
 	li.textCanvas.TextStyle = provider.presenter.textStyle()
+	li.textCanvas.Refresh()
 }
 
 // Declare conformity with the WidgetRenderer interface.
